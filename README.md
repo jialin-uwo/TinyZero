@@ -1,5 +1,16 @@
 # TinyZero
 
+## Reproduction Log — Jialin Li (Fall 2026)
+
+Independent reproduction of R1-Zero-style RLVR (GRPO + rule-based rewards) on small Qwen2.5 base models, built on this TinyZero recipe (veRL).
+
+- **Goal**: verify reward growth, response-length dynamics, and emergent self-verification at small scale; then run one ablation (TBD: KL coefficient / reward shaping / task transfer).
+- **Status**: environment setup.
+- **Hardware**: TBD (2×A100-class).
+- Curves, logs, and analysis will be documented here as the run progresses.
+
+---
+
 > **⚠️ Deprecation Notice:** This repo is no longer actively maintained. For running RL experiments, please directly use the latest [veRL](https://github.com/volcengine/verl) library.
 > For the archived original documentation, see [OLD_README.md](./OLD_README.md).
 
