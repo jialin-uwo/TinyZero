@@ -5,8 +5,15 @@
 Independent reproduction of R1-Zero-style RLVR (GRPO + rule-based rewards) on small Qwen2.5 base models, built on this TinyZero recipe (veRL).
 
 - **Goal**: verify reward growth, response-length dynamics, and emergent self-verification at small scale; then run one ablation (TBD: KL coefficient / reward shaping / task transfer).
-- **Status**: environment setup.
-- **Hardware**: TBD (2×A100-class).
+- **Status** (2026-10-20): environment ready, data generated; smoke run next.
+- **Hardware**: 1–2× NVIDIA H100 80GB (Digital Research Alliance of Canada, Fir cluster), MIG slice for smoke tests.
+
+### Environment recipe (Alliance Fir)
+
+- Modules: `python/3.11` `cuda/12.2` `gcc` `opencv/4.11.0` `arrow/17.0.0`
+- Python env (venv on `/scratch`): `torch 2.4.1+computecanada`, `vllm 0.6.2+computecanada`, `flash-attn 2.5.7+computecanada`, `transformers 4.46.3`, `triton 3.0.0`, `datasets<4`, `verl` (editable, this repo)
+- Deviations from upstream README (version drift, 2024→2026): torch 2.4.0→2.4.1, vllm 0.6.3→0.6.2, flash-attn from source→wheelhouse 2.5.7; PyTorch/vLLM installed from the Alliance wheelhouse (PyPI nvidia-* wheels are stubbed there).
+- Data: countdown task, 327,680 train / 1,024 test prompts (`examples/data_preprocess/countdown.py`).
 - Curves, logs, and analysis will be documented here as the run progresses.
 
 ---
