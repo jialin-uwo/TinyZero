@@ -24,6 +24,9 @@ def get_version(pkg):
 
 package_name = 'vllm'
 package_version = get_version(package_name)
+# Jialin: strip local build suffix (e.g. Alliance "+computecanada") before matching
+if package_version is not None:
+    package_version = package_version.split('+')[0]
 
 if package_version == '0.3.1':
     vllm_version = '0.3.1'
@@ -41,6 +44,12 @@ elif package_version == '0.5.4':
     from .vllm_v_0_5_4.llm import LLMEngine
     from .vllm_v_0_5_4 import parallel_state
 elif package_version == '0.6.3':
+    vllm_version = '0.6.3'
+    from .vllm_v_0_6_3.llm import LLM
+    from .vllm_v_0_6_3.llm import LLMEngine
+    from .vllm_v_0_6_3 import parallel_state
+elif package_version == '0.6.2':
+    # Jialin: 0.6.2 is API-compatible with the 0.6.3 vendored bindings (Alliance wheelhouse build)
     vllm_version = '0.6.3'
     from .vllm_v_0_6_3.llm import LLM
     from .vllm_v_0_6_3.llm import LLMEngine
