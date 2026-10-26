@@ -175,8 +175,11 @@ class ModelRunner(ModelRunner):
                                "provided. Defaulting to scaling factors of 1.0. "
                                "This may lead to less accurate results!")
 
-        if envs.VLLM_TORCH_COMPILE_LEVEL == CompilationLevel.DYNAMO_AS_IS and supports_dynamo():
+        # patched for vllm 0.6.2 (no VLLM_TORCH_COMPILE_LEVEL / VLLM_TEST_DYNAMO_FULLGRAPH_CAPTURE in envs):
+        # default to NO_COMPILATION (eager) when the env attrs are absent
+        _compile_level = getattr(envs, 'VLLM_TORCH_COMPILE_LEVEL', CompilationLevel.NO_COMPILATION)
+        if _compile_level == CompilationLevel.DYNAMO_AS_IS and supports_dynamo():
             from vllm.plugins import get_torch_compile_backend
 
             backend = get_torch_compile_backend() or "eager"
-            self.model = torch.compile(self.model, fullgraph=envs.VLLM_TEST_DYNAMO_FULLGRAPH_CAPTURE, backend=backend)
+            self.model = torch.compile(self.model, fullgraph=getattr(envs, 'VLLM_TEST_DYNAMO_FULLGRAPH_CAPTURE', False), backend=backend)
