@@ -19,7 +19,21 @@ Independent reproduction of R1-Zero-style RLVR (GRPO + rule-based rewards) on sm
 | step 50–1280 | 0.077 plateau | ~40K stable | 0.5B capability ceiling; entropy steady ≈1.5 (no collapse) |
 
 **Takeaways**: ①pipeline verified end-to-end (rollout → log-prob → update, 1,280 steps clean); ②GRPO format alignment happens within ~25 steps; ③capability plateau at 0.5B matches the upstream note ("0.5B fails to learn reasoning") — reward growth now targets the 3B run; ④length compresses as format locks in, no entropy collapse observed.
-- **Hardware**: 1–2× NVIDIA H100 80GB (Digital Research Alliance of Canada, Fir cluster), MIG slice for smoke tests.
+
+## Results: 24h run (3B, GRPO)
+
+**Config**: Qwen2.5-3B, GRPO (`adv_estimator=grpo`), 2×H100, 327K countdown prompts, 24h walltime → **5,499 steps, zero failures**. Log: [`logs/grpo3b_24h.out`](logs/grpo3b_24h.out) · Curves: [`logs/grpo3b_24h_curves.svg`](logs/grpo3b_24h_curves.svg)
+
+| Stage | reward/mean | response length | entropy |
+|---|---|---|---|
+| 0–500 | 0.367 | ~58K | 0.104 |
+| 500–1000 | **0.428–0.430 (peak)** | ~43K | 0.002 |
+| 2000–3000 | 0.410 | ~43K | 0.0014 |
+| 4000–5000 | 0.329 | ~43K | 0.0024 |
+| 5000–5499 | 0.284 | (val段 ~95K) | 0.0024 |
+
+**Reading**: ①3B does learn — reward climbed 0.37→0.44 (+19%) in the first ~1K steps, **5.6× the 0.5B ceiling (0.078)**; ②entropy collapsed from 0.104 to ~0.001 by step ~600 (exploration death), after which reward decayed 0.44→0.28 and the tail length re-inflated; ③diagnosis: exploration collapse, not a pipeline bug — next run is a controlled **entropy-coefficient ablation (0.001 → 0.005)** (job `grpo3b-ent5`) to test whether reward recovers past the first 1K steps.
+- **Hardware**: 1–2× NVIDIA H100 80GB (Digital Research Alliance of Canada; Fir cluster for env/smoke, Nibi cluster for 3B runs), MIG slice for smoke tests.
 
 ### Environment recipe (Alliance Fir)
 
