@@ -1,43 +1,43 @@
-# TinyZero RLVR Reproduction — Jialin Li
+# RLVR Reproduction with TinyZero
 
-An independent reproduction of GRPO with rule-based Countdown rewards on Qwen2.5 base models, using the [TinyZero recipe](https://github.com/Jiayi-Pan/TinyZero) and [veRL](https://github.com/volcengine/verl). The training framework is upstream code; the runs, metrics, plots, and analysis below describe my experiments. These runs do not establish emergent self-verification.
+Jialin Li · Fall 2026 · [Original TinyZero](https://github.com/Jiayi-Pan/TinyZero)
 
-The 0.5B run logged 1,749 steps before its time limit; the 1,280-step milestone was an earlier status report. The 3B run logged 5,499 steps in 24 hours before its time limit. A 3B entropy-coefficient ablation is queued, not completed. The public CSV files below contain training metrics extracted from the original console logs. Raw logs are excluded from the current repository tree because they contain unfiltered model output; earlier commits still contain them.
+I ran the upstream TinyZero/veRL GRPO recipe with rule-based Countdown rewards on Qwen2.5 base models. My contribution here is the Alliance cluster setup, two training runs, extracted metrics, plots, and analysis. The training framework and Countdown task generator come from the upstream project; this is not a new RL algorithm. The results and queued-ablation status below are as of November 5, 2026.
 
-## Results: 0.5B pipeline run
+## Results
 
-Qwen2.5-0.5B; GRPO without a value critic or learned reward model; 327,680 Countdown training prompts; one H100. Metrics: [`logs/smoke_0.5b_metrics.csv`](logs/smoke_0.5b_metrics.csv) · [curves](logs/smoke_0.5b_curves.svg). `global_seqlen/mean` is a batch token count, not response length per sample.
+Both runs used 327,680 Countdown training examples and 1,024 held-out examples, generated with [`examples/data_preprocess/countdown.py`](examples/data_preprocess/countdown.py) from the [upstream Countdown dataset](https://huggingface.co/datasets/Jiayi-Pan/Countdown-Tasks-3to4). GRPO used rule-based rewards, with no learned reward model or value critic. Both jobs stopped at their cluster time limits rather than completing the configured 15 epochs.
 
-| Phase | reward/mean | global_seqlen/mean (tokens) | Reading |
-|---|---|---|---|
-| step 1–5 | 0.027 | ~98K tokens/batch | cold start |
-| step 10–20 | 0.079 | ~50K | reward rises as batch token count falls |
-| step 20–30 | 0.087 (window mean) | ~45K | early high point |
-| step 50–1280 | 0.077 (window mean) | ~40K | reward plateaus; entropy varies rather than collapsing |
-| step 1281–1749 | 0.077 (window mean) | ~40K | similar reward through the end of the logged run |
+| Model and compute | Steps shown | Mean reward | Mean entropy | Mean batch tokens |
+|---|---:|---:|---:|---:|
+| Qwen2.5-0.5B, 1 H100 | 1–5 | 0.027 | 1.514 | 98K |
+| Qwen2.5-0.5B, 1 H100 | 1700–1749 | 0.078 | 1.596 | 40K |
+| Qwen2.5-3B, 2 H100s | 1–500 | 0.368 | 0.104 | 58K |
+| Qwen2.5-3B, 2 H100s | 501–1000 | 0.428 | 0.0021 | 43K |
+| Qwen2.5-3B, 2 H100s | 5001–5499 | 0.284 | 0.0017 | 95K |
 
-**Takeaways**: the training pipeline ran end to end and reward increased early, then plateaued on this task at 0.5B. The logged batch token count fell as reward rose; entropy did not collapse. This run alone does not establish emergent reasoning or self-verification.
+Values are arithmetic means over the listed step ranges from the console metrics `critic/rewards/mean`, `actor/entropy_loss`, and `global_seqlen/mean`. The last is a **batch token count**, not the mean length of one response. Reward values are training metrics, not held-out task accuracy; do not compare the two model sizes as a controlled performance study.
 
-## Results: 3B training run
+- **0.5B:** Reward rose early and later stayed near 0.078 without a comparable entropy decline. The run reached 1,749 logged steps; 1,280 steps was an earlier reported milestone, not the end of the archived run. [Per-step metrics](logs/smoke_0.5b_metrics.csv) · [Curves](logs/smoke_0.5b_curves.svg)
+- **3B:** Reward rose in the first 1,000 steps, then declined late in the run while logged entropy remained low. This is an observation, **not evidence that entropy loss caused the decline**. An entropy-coefficient comparison (0.001 versus 0.005) is queued; no result is available yet. [Per-step metrics](logs/grpo3b_24h_metrics.csv) · [Curves](logs/grpo3b_24h_curves.svg)
 
-Qwen2.5-3B; GRPO; two H100s; 327,680 Countdown training prompts. Metrics: [`logs/grpo3b_24h_metrics.csv`](logs/grpo3b_24h_metrics.csv) · [curves](logs/grpo3b_24h_curves.svg). Window values below are means, not peak values.
+Neither run demonstrates emergent self-verification. The runs are single trials at each size, without an ablation result or statistical uncertainty estimate.
 
-| Stage | reward/mean | global_seqlen/mean (tokens) | entropy |
-|---|---|---|---|
-| 1–500 | 0.367 | ~58K | 0.104 |
-| 501–1000 | 0.428 | ~43K | 0.002 |
-| 2000–3000 | 0.410 | ~43K | 0.0014 |
-| 4000–5000 | 0.329 | ~43K | 0.0024 |
-| 5000–5499 | 0.284 | ~95K | 0.0017 |
+## Reproduce and inspect
 
-The reward trend and low entropy suggest reduced exploration, but do not establish a causal explanation. An entropy-coefficient ablation (0.001 to 0.005) is queued to test this hypothesis; no result is available yet.
+The experiments ran on Digital Research Alliance of Canada H100s (Fir for the 0.5B run; Nibi for the 3B run). Prepare the Countdown Parquet files with [`examples/data_preprocess/countdown.py`](examples/data_preprocess/countdown.py), then set `DATA_DIR`, `BASE_MODEL`, `N_GPUS`, `ROLLOUT_TP_SIZE`, and `EXPERIMENT_NAME` for [`scripts/train_tiny_zero.sh`](scripts/train_tiny_zero.sh). The runner sets `adv_estimator=grpo`, batch size 256, maximum response length 1024, and checkpoint frequency 100. Two GPUs and tensor parallel size 2 were used for the 3B run. The environment used Alliance PyTorch 2.4.1, vLLM 0.6.2, and FlashAttention 2.5.7; consult the [upstream installation guide](https://github.com/Jiayi-Pan/TinyZero) for the original recipe, not for these cluster-specific versions.
 
-## Reproduction notes
+The CSVs preserve step, reward, batch token count, and entropy from the original logs. To redraw a published plot without the private raw console output:
 
-- Compute: Digital Research Alliance of Canada H100s; Fir for environment checks and the 0.5B run, Nibi for the 3B run.
-- Environment: Alliance PyTorch 2.4.1, vLLM 0.6.2, FlashAttention 2.5.7, and an editable veRL installation. These versions differ from the upstream TinyZero instructions; use the Alliance wheelhouse for PyTorch and vLLM.
-- NCCL compatibility: the Alliance PyTorch wheel referenced NCCL 2.18.3 via RPATH, which failed to initialize FSDP with the Nibi driver. Preloading the cluster NCCL 2.27.7 library resolved the initialization error in this environment.
-- vLLM compatibility: the 0.6.2 wheel lacked `vllm.compilation.levels`, required by veRL's vendored 0.6.3 bindings. Copying the upstream 0.6.3 `levels.py` into this environment resolved the import failure. This is an environment-specific workaround, not an upstream installation guide.
-- Prepare data with `python examples/data_preprocess/countdown.py --local_dir DATA_DIR`; the training entry point is [`scripts/train_tiny_zero.sh`](scripts/train_tiny_zero.sh). For general setup instructions and attribution, see the [original TinyZero project](https://github.com/Jiayi-Pan/TinyZero). For metrics extraction and plot commands, see [`scripts/plot_metrics.py`](scripts/plot_metrics.py).
+```sh
+python3 scripts/plot_metrics.py logs/grpo3b_24h_metrics.csv logs/grpo3b_24h_curves.svg 'GRPO run — Qwen2.5-3B, 2×H100'
+```
 
-This project is built on the original [TinyZero](https://github.com/Jiayi-Pan/TinyZero) by Jiayi Pan and collaborators, using [veRL](https://github.com/volcengine/verl) and [Qwen2.5](https://github.com/QwenLM/Qwen2.5).
+With a local raw log, `python3 scripts/plot_metrics.py --extract RAW_LOG METRICS.csv` creates the corresponding metrics file. The raw logs contain unfiltered model generations, so they are excluded from the current repository tree; **older commits still contain them**. The publicly linked CSVs and plots, not the private logs, are the intended artifacts for review.
+
+## Environment notes and attribution
+
+- The Alliance PyTorch wheel's NCCL 2.18.3 RPATH conflicted with the Nibi driver during FSDP initialization. Preloading the cluster's NCCL 2.27.7 library resolved the observed error.
+- The Alliance vLLM 0.6.2 wheel lacked `vllm.compilation.levels`, imported by veRL's vendored 0.6.3 bindings. Adding upstream 0.6.3's `levels.py` in the environment resolved that import. These are local compatibility workarounds, not general installation instructions.
+
+Credit: [TinyZero](https://github.com/Jiayi-Pan/TinyZero) by Jiayi Pan and collaborators, built on [veRL](https://github.com/volcengine/verl); base models [Qwen2.5-0.5B](https://huggingface.co/Qwen/Qwen2.5-0.5B) and [Qwen2.5-3B](https://huggingface.co/Qwen/Qwen2.5-3B) by the Qwen team.
