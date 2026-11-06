@@ -1,28 +1,44 @@
 #!/usr/bin/env python3
-"""Parse a veRL console log into a 3-panel SVG (reward / response length / entropy).
-No dependencies beyond the stdlib. Usage:
-    python3 scripts/plot_smoke.py logs/smoke_0.5b_1280steps.out logs/smoke_0.5b_curves.svg
+"""Extract numeric training metrics and plot them without exposing raw model output.
+
+    python3 scripts/plot_metrics.py --extract RAW_LOG METRICS.csv
+    python3 scripts/plot_metrics.py METRICS.csv CURVES.svg 'Run title'
 """
-import re, sys, statistics
+import csv
+import re
+import statistics
+import sys
 
 FIELDS = {
-    "reward":  re.compile(r"critic/rewards/mean:([-\d.]+)"),
-    "seqlen":  re.compile(r"global_seqlen/mean:([\d.]+)"),
+    "reward": re.compile(r"critic/rewards/mean:([-\d.]+)"),
+    "seqlen": re.compile(r"global_seqlen/mean:([\d.]+)"),
     "entropy": re.compile(r"actor/entropy_loss:([-\d.]+)"),
 }
 STEP = re.compile(r"step:(\d+)")
+COLUMNS = ("step", *FIELDS)
+
+def extract(src, dst):
+    count = 0
+    with open(src, errors="replace") as log, open(dst, "w", newline="") as out:
+        writer = csv.writer(out, lineterminator="\n")
+        writer.writerow(COLUMNS)
+        for line in log:
+            match = STEP.search(line)
+            if not match:
+                continue
+            values = [pattern.search(line) for pattern in FIELDS.values()]
+            if not all(values):
+                continue
+            writer.writerow((match.group(1), *(value.group(1) for value in values)))
+            count += 1
+    print(f"extracted {count} metric rows to {dst}")
 
 def parse(path):
-    rows = {k: [] for k in ["step"] + list(FIELDS)}
-    with open(path, errors="ignore") as f:
-        for line in f:
-            m = STEP.search(line)
-            if not m:
-                continue
-            rows["step"].append(int(m.group(1)))
-            for k, p in FIELDS.items():
-                fm = p.search(line)
-                rows[k].append(float(fm.group(1)) if fm else float("nan"))
+    rows = {key: [] for key in COLUMNS}
+    with open(path, newline="") as stream:
+        for row in csv.DictReader(stream):
+            for key in COLUMNS:
+                rows[key].append(int(row[key]) if key == "step" else float(row[key]))
     return rows
 
 def smooth(y, w=25):
@@ -49,15 +65,19 @@ def panel(xs, ys, x0, y0, W, H, ylabel, color, raw_alpha="#c7d7ea"):
     return s
 
 def main():
-    src, dst = sys.argv[1], sys.argv[2]
+    if sys.argv[1] == "--extract":
+        extract(sys.argv[2], sys.argv[3])
+        return
+    src, dst, title = sys.argv[1:4]
     d = parse(src)
     n = len(d["step"])
     assert n > 10, f"only {n} steps parsed"
     W, H, PW, PH = 760, 720, 700, 200
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" font-family="sans-serif">']
-    parts.append(f'<text x="30" y="24" font-size="14" font-weight="bold">GRPO smoke run — Qwen2.5-0.5B, single H100, {n} steps</text>')
+    parts.append(f'<rect width="{W}" height="{H}" fill="#fff"/>')
+    parts.append(f'<text x="30" y="24" font-size="14" font-weight="bold">{title}, {n} steps</text>')
     for i, (key, label, color) in enumerate([("reward", "reward / mean", "#1f6fd1"),
-                                             ("seqlen", "response length (mean)", "#e07b00"),
+                                             ("seqlen", "global_seqlen/mean (batch tokens)", "#e07b00"),
                                              ("entropy", "entropy", "#2c8a3c")]):
         parts.append(panel(d["step"], d[key], 40, 40 + i * 230, PW, PH, label, color))
     parts.append(f'<text x="{W//2-20}" y="{H-10}" font-size="12" fill="#666">step</text>')
